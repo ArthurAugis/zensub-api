@@ -3,14 +3,16 @@ package fr.augisdev.zensub.auth;
 import fr.augisdev.zensub.auth.dto.LoginRequest;
 import fr.augisdev.zensub.auth.dto.RegisterRequest;
 import fr.augisdev.zensub.auth.dto.TokenResponse;
+import fr.augisdev.zensub.common.exception.ConflictException;
 import fr.augisdev.zensub.user.User;
 import fr.augisdev.zensub.user.UserRepository;
 import fr.augisdev.zensub.user.dto.UserResponse;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Locale;
-import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
@@ -19,7 +21,6 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class AuthService {
@@ -44,10 +45,12 @@ public class AuthService {
 	public UserResponse register(RegisterRequest request) {
 		String email = normalizeEmail(request.email());
 		if (userRepository.existsByEmail(email)) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already in use");
+			throw new ConflictException("Email already in use");
 		}
+		// PostgreSQL stores microseconds; truncating here keeps this response identical to later reads.
+		Instant createdAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
 		User user = new User(email, passwordEncoder.encode(request.password()), request.displayName().trim(),
-				clock.instant());
+				createdAt);
 		return UserResponse.from(userRepository.save(user));
 	}
 
@@ -56,7 +59,7 @@ public class AuthService {
 		// Same error for an unknown email and a wrong password, so the API never reveals which emails exist.
 		User user = userRepository.findByEmail(normalizeEmail(request.email()))
 				.filter(candidate -> passwordEncoder.matches(request.password(), candidate.getPasswordHash()))
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
+				.orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
 		return new TokenResponse(createToken(user), "Bearer", TOKEN_VALIDITY.toSeconds());
 	}
 
