@@ -1,0 +1,12 @@
+CAHIER-DES-CHARGES.md
+CLAUDE.md
+
+target/
+.mvn/wrapper/maven-wrapper.jar
+*.log
+
+.env
+
+.idea/
+*.iml
+.vscode/
