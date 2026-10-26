@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import fr.augisdev.zensub.common.exception.ResourceNotFoundException;
 import fr.augisdev.zensub.user.dto.UserResponse;
 import java.time.Instant;
 import java.util.Optional;
@@ -12,8 +13,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
@@ -42,8 +41,8 @@ class UserServiceTest {
 		when(userRepository.findById(42L)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> userService.getById(42L))
-				.isInstanceOfSatisfying(ResponseStatusException.class,
-						exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+				.isInstanceOf(ResourceNotFoundException.class)
+				.hasMessage("User not found");
 	}
 
 }

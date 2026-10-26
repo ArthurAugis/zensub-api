@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import fr.augisdev.zensub.auth.dto.LoginRequest;
 import fr.augisdev.zensub.auth.dto.RegisterRequest;
 import fr.augisdev.zensub.auth.dto.TokenResponse;
+import fr.augisdev.zensub.common.exception.ConflictException;
 import fr.augisdev.zensub.user.User;
 import fr.augisdev.zensub.user.UserRepository;
 import fr.augisdev.zensub.user.dto.UserResponse;
@@ -23,19 +24,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
-	private static final Instant NOW = Instant.parse("2026-10-26T10:00:00Z");
+	private static final Instant NOW = Instant.parse("2026-10-26T10:00:00.123456789Z");
 
 	@Mock
 	private UserRepository userRepository;
@@ -66,7 +66,7 @@ class AuthServiceTest {
 		verify(userRepository).save(savedUser.capture());
 		assertThat(savedUser.getValue().getEmail()).isEqualTo("alice@example.com");
 		assertThat(savedUser.getValue().getPasswordHash()).isEqualTo("hashed");
-		assertThat(savedUser.getValue().getCreatedAt()).isEqualTo(NOW);
+		assertThat(savedUser.getValue().getCreatedAt()).isEqualTo(Instant.parse("2026-10-26T10:00:00.123456Z"));
 		assertThat(response.email()).isEqualTo("alice@example.com");
 		assertThat(response.displayName()).isEqualTo("Alice");
 	}
@@ -76,8 +76,8 @@ class AuthServiceTest {
 		when(userRepository.existsByEmail("alice@example.com")).thenReturn(true);
 
 		assertThatThrownBy(() -> authService.register(new RegisterRequest("alice@example.com", "password123", "Alice")))
-				.isInstanceOfSatisfying(ResponseStatusException.class,
-						exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+				.isInstanceOf(ConflictException.class)
+				.hasMessage("Email already in use");
 		verify(userRepository, never()).save(any());
 	}
 
@@ -106,8 +106,7 @@ class AuthServiceTest {
 		when(passwordEncoder.matches("wrong-password", "hashed")).thenReturn(false);
 
 		assertThatThrownBy(() -> authService.login(new LoginRequest("alice@example.com", "wrong-password")))
-				.isInstanceOfSatisfying(ResponseStatusException.class,
-						exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+				.isInstanceOf(BadCredentialsException.class);
 		verify(jwtEncoder, never()).encode(any());
 	}
 
@@ -116,8 +115,7 @@ class AuthServiceTest {
 		when(userRepository.findByEmail("nobody@example.com")).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> authService.login(new LoginRequest("nobody@example.com", "password123")))
-				.isInstanceOfSatisfying(ResponseStatusException.class,
-						exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+				.isInstanceOf(BadCredentialsException.class);
 	}
 
 	private static User existingUser() {
